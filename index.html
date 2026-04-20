@@ -16,12 +16,9 @@
         #status-message { position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%); color: #00ffcc; background: #000000aa; padding: 6px 20px; border-radius: 30px; font-size: 14px; z-index: 150; pointer-events: none; backdrop-filter: blur(4px); }
         .window-container { pointer-events: none; } .window-container > div { pointer-events: auto; }
         @media (max-width: 768px) { #controls-panel { padding: 16px 12px; gap: 12px; } .ctrl-btn { padding: 14px 20px; font-size: 22px; } }
-        /* منزلقات الإضاءة */
         .slider-container { margin-bottom: 20px; }
         .slider-container label { display: block; margin-bottom: 8px; color: #00ffcc; font-size: 0.9rem; }
         .slider-container input { width: 100%; cursor: pointer; accent-color: #ffaa00; }
-        .color-input { display: flex; align-items: center; gap: 10px; }
-        .color-input input[type="color"] { width: 50px; height: 40px; border: 1px solid #00ffcc; background: transparent; cursor: pointer; }
     </style>
     
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
@@ -52,6 +49,8 @@
         <button class="ctrl-btn" id="uploadCloudBtn" title="رفع للسحابة">☁️</button>
         <button class="ctrl-btn" id="addWindowBtn" title="فتح نافذة الذكاء">🪟</button>
         <button class="ctrl-btn" id="lightingBtn" title="التحكم في الإضاءة">💡</button>
+        <button class="ctrl-btn" id="greetBtn" title="تحية">👋</button>
+        <button class="ctrl-btn" id="aboutBtn" title="عن المطور">ℹ️</button>
     </div>
 
     <script type="module">
@@ -60,42 +59,22 @@
         import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
         import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 
-        window.ZeroOneOS = {
-            scene: null, camera: null, renderer: null, cssRenderer: null, controls: null,
-            showMessage: null, openDB: null, refreshSysInfo: null,
-            createVaultExplorer: null, createAITerminal: null,
-            ambientLight: null, dirLight: null, movLight: null,
-            addControlButton: (text, onClick, title) => {
-                const panel = document.getElementById('controls-panel');
-                const btn = document.createElement('button');
-                btn.className = 'ctrl-btn';
-                btn.textContent = text;
-                if (title) btn.title = title;
-                btn.addEventListener('click', onClick);
-                panel.appendChild(btn);
-                return btn;
-            }
-        };
-
-        // --- التهيئة ---
+        // --- التهيئة العامة ---
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x020210);
         scene.fog = new THREE.FogExp2(0x020210, 0.002);
-        window.ZeroOneOS.scene = scene;
-
+        
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.set(4, 3, 12);
         camera.lookAt(0, 1.5, 0);
-        window.ZeroOneOS.camera = camera;
-
+        
         const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         document.body.appendChild(renderer.domElement);
-        window.ZeroOneOS.renderer = renderer;
-
+        
         const cssRenderer = new CSS2DRenderer();
         cssRenderer.setSize(window.innerWidth, window.innerHeight);
         cssRenderer.domElement.style.position = 'absolute';
@@ -103,8 +82,7 @@
         cssRenderer.domElement.style.left = '0';
         cssRenderer.domElement.classList.add('window-container');
         document.body.appendChild(cssRenderer.domElement);
-        window.ZeroOneOS.cssRenderer = cssRenderer;
-
+        
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
@@ -114,13 +92,11 @@
         controls.enablePan = true;
         controls.target.set(0, 1.5, 0);
         controls.maxPolarAngle = Math.PI / 2;
-        window.ZeroOneOS.controls = controls;
-
-        // --- الإضاءة (سنحتفظ بمراجع عالمية) ---
+        
+        // --- الإضاءة ---
         const ambientLight = new THREE.AmbientLight(0x404066);
         scene.add(ambientLight);
-        window.ZeroOneOS.ambientLight = ambientLight;
-
+        
         const dirLight = new THREE.DirectionalLight(0xffeedd, 1.2);
         dirLight.position.set(2, 5, 4);
         dirLight.castShadow = true;
@@ -128,8 +104,7 @@
         dirLight.shadow.mapSize.width = 2048;
         dirLight.shadow.mapSize.height = 2048;
         scene.add(dirLight);
-        window.ZeroOneOS.dirLight = dirLight;
-
+        
         const fillLight1 = new THREE.PointLight(0x4466ff, 0.8);
         fillLight1.position.set(-3, 2, 3);
         scene.add(fillLight1);
@@ -139,12 +114,11 @@
         const fillLight3 = new THREE.PointLight(0x00ffcc, 0.5);
         fillLight3.position.set(4, 1, 2);
         scene.add(fillLight3);
-
+        
         const movLight = new THREE.PointLight(0x00aaff, 0.9);
         movLight.position.set(2, 1, 3);
         scene.add(movLight);
-        window.ZeroOneOS.movLight = movLight;
-
+        
         // --- أرضية شفافة ---
         const gridHelper = new THREE.GridHelper(30, 30, 0x00ffcc, 0x1a2a3a);
         gridHelper.position.y = -0.01;
@@ -156,7 +130,7 @@
         ringFloor.rotation.x = Math.PI / 2;
         ringFloor.position.y = 0.01;
         scene.add(ringFloor);
-
+        
         // --- نجوم ---
         const starsGeo = new THREE.BufferGeometry();
         const starsPos = [];
@@ -170,7 +144,7 @@
         const starsMat = new THREE.PointsMaterial({color: 0x88aaff, size: 0.25});
         const stars = new THREE.Points(starsGeo, starsMat);
         scene.add(stars);
-
+        
         // --- قاعدة ---
         const baseMat = new THREE.MeshStandardMaterial({ color: 0x1a1a2e, roughness: 0.2, metalness: 0.7 });
         const base = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.8, 0.4, 64), baseMat);
@@ -179,7 +153,7 @@
         pillar.position.y = 1.2; pillar.receiveShadow = true; pillar.castShadow = true; scene.add(pillar);
         const topPlate = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 0.15, 32), new THREE.MeshStandardMaterial({ color: 0x3a3a6e, roughness: 0.2, metalness: 0.8 }));
         topPlate.position.y = 2.1; topPlate.receiveShadow = true; topPlate.castShadow = true; scene.add(topPlate);
-
+        
         // --- الشهادة ---
         function createCertCanvas() {
             const canvas = document.createElement('canvas');
@@ -207,7 +181,7 @@
         cert.castShadow = true; cert.receiveShadow = true;
         cert.position.y = 2.4; cert.position.z = 0;
         scene.add(cert);
-
+        
         const frameMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, roughness:0.3, metalness:0.8 });
         const fW=6.0, fH=4.3, fD=0.15;
         const addFrame = (w,h,d,x,y,z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), frameMat); m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; scene.add(m); };
@@ -215,19 +189,19 @@
         addFrame(fW,0.2,fD, 0,2.4-fH/2+0.1,0.08);
         addFrame(0.2,fH,fD, fW/2-0.1,2.4,0.08);
         addFrame(0.2,fH,fD, -fW/2+0.1,2.4,0.08);
-
+        
         function createLabel(t,c,pos,size='28px') {
             const d = document.createElement('div'); d.textContent=t; d.style.color=c; d.style.fontSize=size; d.style.fontWeight='bold'; d.style.fontFamily='Cairo'; d.style.textShadow=`0 0 20px ${c}`;
             const lbl = new CSS2DObject(d); lbl.position.copy(pos); return lbl;
         }
         scene.add(createLabel('✍️ المهندس عيسى علي مصطفى', '#ffaa00', new THREE.Vector3(-2.5,1.6,0.6)));
         scene.add(createLabel('🤖 DeepSeek AI', '#00ffcc', new THREE.Vector3(2.5,1.6,0.6)));
-
+        
         const ring = new THREE.Mesh(new THREE.TorusGeometry(3.4,0.04,32,200), new THREE.MeshStandardMaterial({color:0x00ffcc, emissive:0x004444}));
         ring.rotation.x = Math.PI/2; ring.position.y=2.4; ring.position.z=0.15; scene.add(ring);
         const ring2 = new THREE.Mesh(new THREE.TorusGeometry(3.6,0.03,16,200), new THREE.MeshStandardMaterial({color:0xffaa00, emissive:0x442200}));
         ring2.rotation.x = Math.PI/2; ring2.position.y=2.4; ring2.position.z=0.15; scene.add(ring2);
-
+        
         // --- دوال مساعدة ---
         function showMessage(msg, isGood=true) {
             const el = document.getElementById('status-message');
@@ -236,8 +210,7 @@
             el.style.color = isGood ? '#00ffcc' : '#ff8888';
             setTimeout(() => el.textContent = '📱 جاهز · استخدم النوافذ أو الأزرار', 3000);
         }
-        window.ZeroOneOS.showMessage = showMessage;
-
+        
         async function openDB() {
             return new Promise((res, rej) => {
                 const req = indexedDB.open('ZeroOneVault', 1);
@@ -246,8 +219,7 @@
                 req.onerror = rej;
             });
         }
-        window.ZeroOneOS.openDB = openDB;
-
+        
         function makeDraggable(element, objectToDrag) {
             let isDragging = false, startX = 0, startY = 0, startPos = { x: 0, y: 0 };
             function onDragStart(e) {
@@ -276,7 +248,7 @@
             window.addEventListener('touchmove', onDragMove, { passive: false });
             window.addEventListener('touchend', onDragEnd);
         }
-
+        
         function addResizeControls(headerElement, labelObject) {
             const scaleStep = 0.2;
             const btnPlus = document.createElement('span');
@@ -292,8 +264,8 @@
             headerElement.appendChild(btnPlus);
             headerElement.appendChild(btnMinus);
         }
-
-        // --- نافذة SYSTEM INFO (مختصرة) ---
+        
+        // --- نافذة SYSTEM INFO ---
         const sysInfoWindow = (() => {
             const div = document.createElement('div');
             div.style.cssText = 'background:rgba(10,20,30,0.9); color:#00ffcc; font-family:Cairo; padding:20px; border-radius:16px; border:1px solid #ffaa00; backdrop-filter:blur(12px); width:320px; box-shadow:0 0 40px #00ffcc33;';
@@ -308,7 +280,7 @@
             div.querySelector('#closeSysWin').addEventListener('touchstart', (e) => { e.preventDefault(); label.visible = false; });
             return label;
         })();
-
+        
         async function refreshSysInfo() {
             const cloudEl = document.getElementById('cloudStat'), vaultEl = document.getElementById('vaultStat'), memEl = document.getElementById('memStat');
             if (!cloudEl) return;
@@ -322,10 +294,11 @@
             } catch(e) { vaultEl.textContent = 'خطأ'; }
             memEl.textContent = performance.memory ? (performance.memory.usedJSHeapSize / 1048576).toFixed(1) + ' MB' : 'غير متاح';
         }
-        window.ZeroOneOS.refreshSysInfo = refreshSysInfo;
         setInterval(refreshSysInfo, 3000);
-
-        // --- نافذة VAULT EXPLORER (مختصرة) ---
+        document.getElementById('refreshSysBtn')?.addEventListener('click', refreshSysInfo);
+        document.getElementById('openVaultExplorerBtn')?.addEventListener('click', createVaultExplorer);
+        
+        // --- نافذة VAULT EXPLORER ---
         let vaultExplorerWindow = null;
         function createVaultExplorer() {
             if (vaultExplorerWindow) { vaultExplorerWindow.visible = true; return; }
@@ -382,9 +355,8 @@
             setTimeout(loadFileList, 100);
             return label;
         }
-        window.ZeroOneOS.createVaultExplorer = createVaultExplorer;
-
-        // --- نافذة AI TERMINAL (مختصرة) ---
+        
+        // --- نافذة AI TERMINAL ---
         let aiTerminalWindow = null;
         async function createAITerminal() {
             if (aiTerminalWindow) { aiTerminalWindow.visible = true; return; }
@@ -401,7 +373,7 @@
             addResizeControls(header, label);
             aiTerminalWindow = label;
             
-            const intentLabels = ['show files', 'delete file', 'download file', 'clear vault', 'system info', 'screenshot', 'record video', 'lighting', 'unknown'];
+            const intentLabels = ['show files', 'system info', 'screenshot', 'lighting', 'greet', 'about'];
             div.querySelector('#sendAICommand').addEventListener('click', async () => {
                 const input = div.querySelector('#aiCommandInput');
                 const outputDiv = div.querySelector('#aiOutput');
@@ -414,6 +386,8 @@
                 else if (top === 'system info') { sysInfoWindow.visible = true; outputDiv.textContent = `> ${cmd}\n> ✅ عرض معلومات النظام`; }
                 else if (top === 'screenshot') { document.getElementById('screenshotBtn').click(); outputDiv.textContent = `> ${cmd}\n> ✅ لقطة شاشة`; }
                 else if (top === 'lighting') { document.getElementById('lightingBtn').click(); outputDiv.textContent = `> ${cmd}\n> ✅ فتح إعدادات الإضاءة`; }
+                else if (top === 'greet') { showMessage('مرحباً بك في ZeroOne OS!'); outputDiv.textContent = `> ${cmd}\n> ✅ تم الترحيب`; }
+                else if (top === 'about') { document.getElementById('aboutBtn').click(); outputDiv.textContent = `> ${cmd}\n> ✅ فتح عن المطور`; }
                 else { outputDiv.textContent = `> ${cmd}\n> ❓ لم يتم التعرف على الأمر`; }
                 input.value = '';
             });
@@ -422,9 +396,8 @@
             showMessage('🤖 الذكاء الاصطناعي جاهز');
             return label;
         }
-        window.ZeroOneOS.createAITerminal = createAITerminal;
-
-        // --- نافذة التحكم في الإضاءة (الجديدة) ---
+        
+        // --- نافذة التحكم في الإضاءة ---
         let lightingWindow = null;
         function createLightingWindow() {
             if (lightingWindow) { lightingWindow.visible = true; return; }
@@ -449,8 +422,8 @@
                     <label>✨ الضوء المتحرك <span id="movVal">90%</span></label>
                     <input type="range" id="movSlider" min="0" max="2" step="0.05" value="0.9">
                 </div>
-                <div class="slider-container color-input">
-                    <label>🎨 لون الضوء المتحرك</label>
+                <div class="slider-container" style="display:flex; align-items:center; gap:10px;">
+                    <label style="margin:0;">🎨 لون الضوء المتحرك</label>
                     <input type="color" id="movColor" value="#00aaff">
                 </div>
             `;
@@ -470,242 +443,122 @@
             
             ambientSlider.addEventListener('input', () => {
                 const val = parseFloat(ambientSlider.value);
-                window.ZeroOneOS.ambientLight.intensity = val;
+                ambientLight.intensity = val;
                 div.querySelector('#ambientVal').textContent = Math.round(val*100) + '%';
             });
             dirSlider.addEventListener('input', () => {
-                const val = parseFloat(dirSlider.value const val = parseFloat(dirSlider.value);
-                window.ZeroOne);
-                window.ZeroOneOS.dirLight.intensity =OS.dirLight.intensity = val;
-                div.querySelector('#dirVal').text val;
-                div.querySelector('#dirVal').textContent = Math.round(val/2*100)Content = Math.round(val/2*100) + '%';
-            + '%';
+                const val = parseFloat(dirSlider.value);
+                dirLight.intensity = val;
+                div.querySelector('#dirVal').textContent = Math.round(val/2*100) + '%';
             });
-            movSlider.addEventListener('input', });
-            movSlider.addEventListener('input', () => () => {
-                const val = parseFloat(m {
-                const val = parseFloat(movSlider.valueovSlider.value);
-                window.ZeroOneOS);
-                window.ZeroOneOS.movLight.intensity = val.movLight.intensity = val;
-                div.querySelector('#movVal').text;
-                div.querySelector('#movVal').textContent = Math.round(val/2*100) + '%Content = Math.round(val/2*100) + '%';
-            });
-            movColor.addEventListener('';
+            movSlider.addEventListener('input', () => {
+                const val = parseFloat(movSlider.value);
+                movLight.intensity = val;
+                div.querySelector('#movVal').textContent = Math.round(val/2*100) + '%';
             });
             movColor.addEventListener('input', () => {
-               input', () => {
-                window.ZeroOneOS.movLight.color.set window.ZeroOneOS.movLight.color.set(movColor.value);
-            });
-(movColor.value);
+                movLight.color.set(movColor.value);
             });
             
-            div.querySelector('#closeLightWin').addEventListener('click            
-            div.querySelector('#closeLightWin').addEventListener('click', ()', () => label.visible => label.visible = false);
-            div.querySelector('#closeLightWin = false);
-            div.querySelector('#closeLightWin').add').addEventListener('touchstart', (EventListener('touchstart', (e) => { e.preventDefaulte) => { e.preventDefault(); label.visible = false; });
-            
-            return label(); label.visible = false; });
+            div.querySelector('#closeLightWin').addEventListener('click', () => label.visible = false);
+            div.querySelector('#closeLightWin').addEventListener('touchstart', (e) => { e.preventDefault(); label.visible = false; });
             
             return label;
         }
-
-        // --- ربط;
-        }
-
-        // --- ربط الأز الأزرار ---
-        document.getElementByIdرار ---
-        document.getElementById('refreshSysBtn')?.('refreshSysBtn')?.addEventListener('click', refreshSysInfo);
-       addEventListener('click', refreshSysInfo);
-        document.getElementById('openVaultExplorerBtn') document.getElementById('openVaultExplorerBtn')?.addEventListener('?.addEventListener('click', createVaultExplorer);
-        document.getElementById('click', createVaultExplorer);
-        documentscreenshotBtn').addEventListener('click.getElementById('screenshotBtn').addEventListener('click', ()', () => {
-            render => {
+        
+        // --- أزرار الإجراءات ---
+        document.getElementById('screenshotBtn').addEventListener('click', () => {
             renderer.render(scene, camera);
-            rendererer.render(scene, camera);
-            renderer.domElement.toBlob(blob =>.domElement.toBlob(blob => { saveAs(blob, `zeroone-${ { saveAs(blob, `zeroone-${Date.now()}.png`); showDate.now()}.png`); showMessage('📸 لقطة شاشة محفوظةMessage('📸 لقطة شاشة محفوظة'); });
+            renderer.domElement.toBlob(blob => { saveAs(blob, `zeroone-${Date.now()}.png`); showMessage('📸 لقطة شاشة محفوظة'); });
         });
-        let'); });
-        });
-        let mediaRecorder, chunks = [], recording mediaRecorder, chunks = [], recording = false;
-        document.getElementById('record = false;
+        let mediaRecorder, chunks = [], recording = false;
         document.getElementById('recordBtn').addEventListener('click', () => {
-            ifBtn').addEventListener('click', () => {
             if (!recording) {
-                (!recording) {
                 chunks = [];
-                const stream = render chunks = [];
-                const stream = renderer.domElement.captureStream(er.domElement.captureStream(30);
-                mediaRecorder = new MediaRecorder(stream, { m30);
-                mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm'imeType: 'video/webm' });
-                mediaRecorder. });
+                const stream = renderer.domElement.captureStream(30);
+                mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
                 mediaRecorder.ondataavailable = e => chunks.push(e.data);
-               ondataavailable = e => chunks.push(e.data);
                 mediaRecorder.onstop = () => {
-                    mediaRecorder.onstop = () => {
-                    saveAs saveAs(new Blob(chunks), `zero(new Blob(chunks), `zeroone-${Date.now()}.webmone-${Date.now()}.webm`);
-                    showMessage('🎥`);
+                    saveAs(new Blob(chunks), `zeroone-${Date.now()}.webm`);
                     showMessage('🎥 فيديو محفوظ');
-                    document.getElementById فيديو محفوظ');
-                    document.getElementById('record('recordBtn').classList.remove('active');
-                    document.getElementById('Btn').classList.remove('active');
-                    document.getElementById('recordBtn').innerHTML = '🎥recordBtn').innerHTML = '🎥';
-                };
-                mediaRecorder.start();
-                recording';
+                    document.getElementById('recordBtn').classList.remove('active');
+                    document.getElementById('recordBtn').innerHTML = '🎥';
                 };
                 mediaRecorder.start();
                 recording = true;
-                = true;
-                document.getElementById('recordBtn').classList.add(' document.getElementById('recordBtn').classList.add('active');
-                document.getElementById('recordBtn').innerHTML = 'active');
-                document.getElementById('recordBtn').innerHTML =⏹️ إيقاف '⏹️ إيقاف';
-            } else { mediaRecorder.stop();';
+                document.getElementById('recordBtn').classList.add('active');
+                document.getElementById('recordBtn').innerHTML = '⏹️ إيقاف';
             } else { mediaRecorder.stop(); recording = false; }
-        recording = false; }
         });
-        });
-        document.getElementById('exportBtn').addEventListener('click document.getElementById('exportBtn').addEventListener('click', () => {
-            new GLTFExporter', () => {
-            new GLTFExporter().parse(scene, gltf => save().parse(scene, gltf =>As(new Blob([JSON saveAs(new Blob([JSON.stringify(gltf)], {type:'application/json.stringify(gltf)], {type:'application/json'}), `scene-${Date.now()}.'}), `scene-${Date.now()}.glgltf`), null, {binary:tf`), null, {binary:false});
-            showMessage('📁 تم تصدير المشهد');
-        });
-        document.getElementById('compressEncryptBtn').addEventListener('click', () => {
-            new GLTFfalse});
+        document.getElementById('exportBtn').addEventListener('click', () => {
+            new GLTFExporter().parse(scene, gltf => saveAs(new Blob([JSON.stringify(gltf)], {type:'application/json'}), `scene-${Date.now()}.gltf`), null, {binary:false});
             showMessage('📁 تم تصدير المشهد');
         });
         document.getElementById('compressEncryptBtn').addEventListener('click', () => {
             new GLTFExporter().parse(scene, async gltf => {
-                const zip =Exporter().parse(scene, async gltf => {
-                const zip = new JS new JSZip();
+                const zip = new JSZip();
                 zip.file('scene.gltf', JSON.stringify(gltf));
-               Zip();
-                zip.file('scene.gltf', JSON.stringify(gltf));
-                const blob = await zip.generateAsync({type:'blob', compression:'DEFLATE const blob = await zip.generateAsync({type:'blob', compression:'DEFLATE'});
-                const reader = new FileReader();
-                reader.onload = ()'});
+                const blob = await zip.generateAsync({type:'blob', compression:'DEFLATE'});
                 const reader = new FileReader();
                 reader.onload = () => {
-                    const enc = Crypto => {
-                    const enc = CryptoJS.AES.encrypt(CryptoJS.lib.WordArray.create(readerJS.AES.encrypt(CryptoJS.lib.WordArray.create(reader.result), 'ZeroOneSecretKey').toString();
-                    save.result), 'ZeroOneSecretKey').toString();
-                    saveAs(new Blob([enc]), `encrypted-${Date.now()}.As(new Blob([enc]), `encrypted-${Date.now()}.enc`);
-                    showMessage('🔐enc`);
+                    const enc = CryptoJS.AES.encrypt(CryptoJS.lib.WordArray.create(reader.result), 'ZeroOneSecretKey').toString();
+                    saveAs(new Blob([enc]), `encrypted-${Date.now()}.enc`);
                     showMessage('🔐 تم الضغط والتشفير');
-                };
-                reader.readAsArrayBuffer(blob);
-            تم الضغط والتشفير');
                 };
                 reader.readAsArrayBuffer(blob);
             });
         });
-        document.getElementById('saveToV });
-        });
-        document.getElementById('saveToVaultBtnaultBtn').addEventListener('click', async () =>').addEventListener('click', async () => {
-            new GLTFExporter().parse(scene {
-            new GLTFExporter().parse(scene, async, async gltf => {
-                const zip = new JS gltf => {
+        document.getElementById('saveToVaultBtn').addEventListener('click', async () => {
+            new GLTFExporter().parse(scene, async gltf => {
                 const zip = new JSZip();
-                zip.file('scene.gltfZip();
                 zip.file('scene.gltf', JSON.stringify(gltf));
-                const blob = await zip.generateAsync({type:'blob', JSON.stringify(gltf));
                 const blob = await zip.generateAsync({type:'blob', compression:'DEFLATE'});
-                const db =', compression:'DEFLATE'});
                 const db = await openDB();
-                const await openDB();
-                const tx = db.transaction('files', 'read tx = db.transaction('files', 'readwrite');
-                tx.objectStore('files').put(blwrite');
-                tx.objectStore('files').put(blob, `scene-${ob, `scene-${Date.nowDate.now()}.zip`);
-                showMessage('💾 تم الحفظ في الخزنة()}.zip`);
+                const tx = db.transaction('files', 'readwrite');
+                tx.objectStore('files').put(blob, `scene-${Date.now()}.zip`);
                 showMessage('💾 تم الحفظ في الخزنة');
                 refreshSysInfo();
             });
         });
-       ');
-                refreshSysInfo();
-            });
-        });
-        document.getElementById('uploadCloudBtn').addEventListener(' document.getElementById('uploadCloudBtn').addEventListener('click', () => showMessage('☁️click', () => showMessage('☁️ جاهز للرفع (أضف مفاتيح R2)'));
-        document.getElementById جاهز للرفع (أضف مفاتيح R2)'));
+        document.getElementById('uploadCloudBtn').addEventListener('click', () => showMessage('☁️ جاهز للرفع (أضف مفاتيح R2)'));
         document.getElementById('addWindowBtn').addEventListener('click', createAITerminal);
-        document.getElementById('lightingBtn').addEventListener('addWindowBtn').addEventListener('click', createAITerminal);
-        document.getElementById('lightingBtn').addEventListener('click', createLighting('click', createLightingWindowWindow);
-
-        // أز);
-
-        // أزرار الإضافات
-        window.ZeroOneOSرار الإضافات
-        window.Zero.addControlButton('👋 تحية', ()OneOS.addControlButton('👋 تحية', () => showMessage('مرحباً بك في ZeroOne OS => showMessage('مرحباً بك في ZeroOne OS!'));
-        window.ZeroOneOS.addControlButton('!'));
-        window.ZeroOneOS.addControlButton('ℹ️ عني', () => {
-           ℹ️ عني', () => {
+        document.getElementById('lightingBtn').addEventListener('click', createLightingWindow);
+        document.getElementById('greetBtn').addEventListener('click', () => showMessage('مرحباً بك في ZeroOne OS!'));
+        document.getElementById('aboutBtn').addEventListener('click', () => {
             const div = document.createElement('div');
-            div.style.css const div = document.createElement('div');
-            div.style.cssText =Text = 'background:rgba(10,20, 'background:rgba(10,20,30,0.95); color:#ffaa30,0.95); color:#ffaa00; font-family:Cairo; padding:20px00; font-family:Cairo; padding:20px;; border-radius:16px; border:1px solid #ffaa00; backdrop-filter: border-radius:16px; border:1px solid #ffaa00; backdrop-filter:blblur(12px); width:300px;';
-           ur(12px); width:300px;';
-            div.innerHTML = `<div id="aboutWinHeader" div.innerHTML = `<div id="aboutWinHeader" style="display style="display:flex; justify-content:space-between; margin-bottom::flex; justify-content:space-between; margin-bottom:15px; cursor:grab;"><span style="color:#0015px; cursor:grab;"><span style="color:#00ffcc;">ℹ️ عن المطور</ffcc;">ℹ️ عن المطور</span><span id="closeAboutWin" stylespan><span id="closeAboutWin" style="cursor:pointer="cursor:pointer;">✕</span></div><div style;">✕</span></div><div style="text-align:center="text-align:center;"><p>🥷 المهندس: <strong style="color;"><p>🥷 المهندس: <strong style="color:#ffaa00;">عيسى علي مصطفى</strong></p><p:#ffaa00;">عيسى علي مصطفى</strong></p><p style="color:#ddd;">ZeroOne OS - style="color:#ddd;">ZeroOne OS ثورة التشفير</p><p style - ثورة التشفير</p><p style="color="color:#00ffcc;">✨ "ه:#00ffcc;">✨ "هكذا تبدأكذا تبدأ الأساطير" ✨</p الأساطير" ✨</p></div>`;
-            const label = new THREE></div>`;
-            const label = new THREE.CSS2D.CSS2DObject(div);
-            label.position.set(0, 2.5, 3.5Object(div);
+            div.style.cssText = 'background:rgba(10,20,30,0.95); color:#ffaa00; font-family:Cairo; padding:20px; border-radius:16px; border:1px solid #ffaa00; backdrop-filter:blur(12px); width:300px;';
+            div.innerHTML = `<div id="aboutWinHeader" style="display:flex; justify-content:space-between; margin-bottom:15px; cursor:grab;"><span style="color:#00ffcc;">ℹ️ عن المطور</span><span id="closeAboutWin" style="cursor:pointer;">✕</span></div><div style="text-align:center;"><p>🥷 المهندس: <strong style="color:#ffaa00;">عيسى علي مصطفى</strong></p><p style="color:#ddd;">ZeroOne OS - ثورة التشفير</p><p style="color:#00ffcc;">✨ "هكذا تبدأ الأساطير" ✨</p></div>`;
+            const label = new THREE.CSS2DObject(div);
             label.position.set(0, 2.5, 3.5);
             scene.add(label);
-            scene.add(label);
-            makeDraggable(div.querySelector('#about);
-            makeDraggable(div.querySelectorWinHeader'), label);
-            div.querySelector('#closeAbout('#aboutWinHeader'), label);
-            div.querySelector('#closeAboutWin').addEventListener('click', () => sceneWin').addEventListener('click', () => scene.remove(label));
+            makeDraggable(div.querySelector('#aboutWinHeader'), label);
+            div.querySelector('#closeAboutWin').addEventListener('click', () => scene.remove(label));
+            div.querySelector('#closeAboutWin').addEventListener('touchstart', (e) => { e.preventDefault(); scene.remove(label); });
         });
-
-        setTimeout(() => {.remove(label));
-        });
-
-        setTimeout(() => { refreshSysInfo(); createAITerminal(); refreshSysInfo(); createAITerm }, 1000);
-
-        function animate() {
-            requestAnimationFrameinal(); }, 1000);
-
+        
+        // --- بدء كل شيء ---
+        setTimeout(() => { refreshSysInfo(); createAITerminal(); }, 1000);
+        
         function animate() {
             requestAnimationFrame(animate);
             controls.update();
-            const t(animate);
-            controls.update();
-            = performance.now() * 0.001 const t = performance.now() * 0.001;
-            ring.rotation;
+            const t = performance.now() * 0.001;
             ring.rotation.z += 0.003;
-           .z += 0.003;
-            ring2 ring2.rotation.z -= 0.rotation.z -= 0.002;
-            movLight.002;
-            movLight.position.x = Math.position.x = Math.sin(t*0.4)*5;
-            movLight.position.z.sin(t*0.4)*5;
+            ring2.rotation.z -= 0.002;
+            movLight.position.x = Math.sin(t*0.4)*5;
             movLight.position.z = Math.cos(t*0.4)*5;
-            movLight.position.y = Math.cos(t*0.4)*5;
-            movLight.position.y = 3.0 + Math.sin(t*1. = 3.0 + Math.sin(t*1.0)*1.5;
-            stars.rotation0)*1.5;
-            stars.rotation.y += 0.0001.y += 0.0001;
+            movLight.position.y = 3.0 + Math.sin(t*1.0)*1.5;
+            stars.rotation.y += 0.0001;
             renderer.render(scene, camera);
-            cssRenderer;
-            renderer.render(scene, camera);
-            cssRenderer.render(scene,.render(scene, camera);
-        camera);
+            cssRenderer.render(scene, camera);
         }
         animate();
-
+        
         window.addEventListener('resize', () => {
-            camera.as }
-        animate();
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeightpect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer;
+            camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
-            css.setSize(window.innerWidth, window.innerHeight);
-            cssRenderer.setSize(window.innerWidth, windowRenderer.setSize(window.innerWidth, window.innerHeight);
-        });
-    </script>
-</body>
-</html>
-.innerHeight);
+            cssRenderer.setSize(window.innerWidth, window.innerHeight);
         });
     </script>
 </body>
