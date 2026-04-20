@@ -153,7 +153,9 @@
         pillar.position.y = 1.2; pillar.receiveShadow = true; pillar.castShadow = true; scene.add(pillar);
         const topPlate = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 0.15, 32), new THREE.MeshStandardMaterial({ color: 0x3a3a6e, roughness: 0.2, metalness: 0.8 }));
         topPlate.position.y = 2.1; topPlate.receiveShadow = true; topPlate.castShadow = true; scene.add(topPlate);
-        
+        base.visible = false;
+pillar.visible = false;
+topPlate.visible = false;
         // --- الشهادة ---
         function createCertCanvas() {
             const canvas = document.createElement('canvas');
