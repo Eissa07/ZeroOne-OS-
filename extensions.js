@@ -1,10 +1,7 @@
-
-// ==================== ZeroOne OS - ملف الإضافات ====================
-// هذا هو المكان الوحيد الذي تحتاج لتعديله لإضافة مميزاتك الخاصة!
-// كل ما عليك هو استخدام كائن window.ZeroOneOS للوصول إلى جميع وظائف النظام.
+// ==================== ZeroOne OS - ملف الإضافات (نسخة اللمس) ====================
+// هذا الملف جاهز للعمل على أجهزة الموبايل (Android/iOS) التي تعمل باللمس.
 
 (function() {
-    // انتظر حتى يتم تحميل النظام الأساسي بالكامل
     const waitForOS = setInterval(() => {
         if (window.ZeroOneOS && window.ZeroOneOS.scene) {
             clearInterval(waitForOS);
@@ -12,11 +9,62 @@
         }
     }, 100);
 
-    function initExtensions() {
-        console.log('🧩 جاري تحميل الإضافات من extensions.js...');
+    // دالة مساعدة لجعل أي عنصر قابل للسحب باللمس والفأرة
+    function makeDraggable(element, objectToDrag) {
+        let isDragging = false;
+        let startX = 0, startY = 0;
+        let startPos = { x: 0, y: 0 };
+
+        function onDragStart(e) {
+            e.preventDefault();
+            isDragging = true;
+            
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            
+            startX = clientX;
+            startY = clientY;
+            startPos.x = objectToDrag.position.x;
+            startPos.y = objectToDrag.position.y;
+            
+            element.style.cursor = 'grabbing';
+        }
+
+        function onDragMove(e) {
+            if (!isDragging) return;
+            e.preventDefault();
+            
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            
+            const dx = (clientX - startX) * 0.01;
+            const dy = (clientY - startY) * 0.01;
+            
+            objectToDrag.position.x = startPos.x + dx;
+            objectToDrag.position.y = startPos.y - dy;
+        }
+
+        function onDragEnd(e) {
+            if (!isDragging) return;
+            isDragging = false;
+            element.style.cursor = 'grab';
+        }
+
+        // أحداث الفأرة
+        element.addEventListener('mousedown', onDragStart);
+        window.addEventListener('mousemove', onDragMove);
+        window.addEventListener('mouseup', onDragEnd);
         
-        // يمكنك استخدام أي دالة من النظام الأساسي بهذه الطريقة:
-        const { showMessage, addControlButton, scene, createVaultExplorer } = window.ZeroOneOS;
+        // أحداث اللمس
+        element.addEventListener('touchstart', onDragStart, { passive: false });
+        window.addEventListener('touchmove', onDragMove, { passive: false });
+        window.addEventListener('touchend', onDragEnd);
+    }
+
+    function initExtensions() {
+        console.log('🧩 جاري تحميل الإضافات من extensions.js (نسخة اللمس)...');
+        
+        const { showMessage, addControlButton, scene, cssRenderer, camera, renderer } = window.ZeroOneOS;
 
         // ===== مثال 1: إضافة زر جديد إلى شريط التحكم السفلي =====
         addControlButton('👋 تحية', () => {
@@ -29,7 +77,6 @@
         }, 'معلومات عن المطور');
 
         function createAboutWindow() {
-            // إنشاء عنصر HTML للنافذة
             const div = document.createElement('div');
             div.style.cssText = `
                 background: rgba(10,20,30,0.95); color: #ffaa00; font-family: 'Cairo', sans-serif;
@@ -37,7 +84,7 @@
                 backdrop-filter: blur(12px); width: 300px; box-shadow: 0 0 40px #ffaa0033;
             `;
             div.innerHTML = `
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; cursor:grab; border-bottom:1px solid #3a5a7a; padding-bottom:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; cursor:grab; border-bottom:1px solid #3a5a7a; padding-bottom:10px;" id="aboutWinHeader">
                     <span style="font-weight:bold; font-size:1.3rem; color:#00ffcc;">ℹ️ عن المطور</span>
                     <span style="cursor:pointer; color:#ffaa00; font-size:1.5rem;" id="closeAboutWin">✕</span>
                 </div>
@@ -48,40 +95,55 @@
                 </div>
             `;
             
-            // استخدام CSS2DRenderer من النظام الأساسي
-            const cssRenderer = window.ZeroOneOS.cssRenderer;
-            const scene = window.ZeroOneOS.scene;
             const label = new THREE.CSS2DObject(div);
             label.position.set(0, 2.5, 3.5);
-            
-            // إضافة النافذة للمشهد
             scene.add(label);
             
-            // جعل النافذة قابلة للسحب
-            let dragging = false, startMouse = new THREE.Vector2(), startPos = label.position.clone();
-            div.querySelector('div').addEventListener('mousedown', (e) => {
-                dragging = true; div.querySelector('div').style.cursor = 'grabbing';
-                startMouse.set(e.clientX, e.clientY); startPos.copy(label.position);
-                e.stopPropagation();
-            });
-            window.addEventListener('mousemove', (e) => {
-                if (!dragging) return;
-                label.position.x = startPos.x + (e.clientX - startMouse.x) * 0.01;
-                label.position.y = startPos.y - (e.clientY - startMouse.y) * 0.01;
-            });
-            window.addEventListener('mouseup', () => { dragging = false; div.querySelector('div').style.cursor = 'grab'; });
+            // جعل النافذة قابلة للسحب باللمس
+            const header = div.querySelector('#aboutWinHeader');
+            makeDraggable(header, label);
             
             // زر الإغلاق
             div.querySelector('#closeAboutWin').addEventListener('click', () => {
                 scene.remove(label);
             });
             
-            window.ZeroOneOS.showMessage('ℹ️ نافذة "عن المطور" مفتوحة');
+            // دعم اللمس على زر الإغلاق
+            div.querySelector('#closeAboutWin').addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                scene.remove(label);
+            });
+            
+            showMessage('ℹ️ نافذة "عن المطور" مفتوحة');
         }
 
-        // يمكنك إضافة أي عدد من الأزرار والوظائف هنا...
-        // addControlButton('🔒 خزنتي', () => { window.ZeroOneOS.createVaultExplorer(); }, 'فتح الخزنة');
+        // ===== إصلاح سحب النوافذ الأساسية للمس =====
+        function fixCoreWindows() {
+            // نافذة SYSTEM INFO
+            const sysWin = Array.from(scene.children).find(c => c.isCSS2DObject && c.element?.querySelector?.('#closeSysWin'));
+            if (sysWin) {
+                const header = sysWin.element.querySelector('div');
+                if (header) makeDraggable(header, sysWin);
+            }
+            
+            // نافذة AI TERMINAL (إذا كانت موجودة)
+            const aiWin = Array.from(scene.children).find(c => c.isCSS2DObject && c.element?.querySelector?.('#closeAIWin'));
+            if (aiWin) {
+                const header = aiWin.element.querySelector('div');
+                if (header) makeDraggable(header, aiWin);
+            }
+            
+            // نافذة VAULT EXPLORER (إذا كانت موجودة)
+            const vaultWin = Array.from(scene.children).find(c => c.isCSS2DObject && c.element?.querySelector?.('#closeVaultWin'));
+            if (vaultWin) {
+                const header = vaultWin.element.querySelector('div');
+                if (header) makeDraggable(header, vaultWin);
+            }
+        }
+
+        // محاولة إصلاح النوافذ الأساسية بعد تحميلها
+        setTimeout(fixCoreWindows, 2000);
         
-        window.ZeroOneOS.showMessage('🧩 الإضافات جاهزة للعمل!');
+        window.ZeroOneOS.showMessage('🧩 الإضافات جاهزة (تدعم اللمس)!');
     }
 })();
