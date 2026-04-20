@@ -135,15 +135,22 @@
         scene.add(new THREE.PointLight(0x00ffcc, 0.5, 20, 4, 1, 2));
 
         // ==================== أرضية عاكسة ====================
-        const reflector = new Reflector(new THREE.PlaneGeometry(25, 25), {
-            clipBias: 0.003,
-            textureWidth: window.innerWidth * 2,
-            textureHeight: window.innerHeight * 2,
-            color: 0x112233
-        });
-        reflector.rotateX(-Math.PI / 2);
-        reflector.position.y = -0.01;
-        reflector.receiveShadow = true;
+                // ==================== أرضية شفافة بدلاً من المرآة ====================
+        // تمت إزالة Reflector واستبداله بأرضية زجاجية شفافة جدًا تعطي إحساس الفضاء
+        
+        // شبكة دائرية أنيقة (بدلاً من المرآة)
+        const gridHelper = new THREE.GridHelper(30, 30, 0x00ffcc, 0x1a2a3a);
+        gridHelper.position.y = -0.01;
+        scene.add(gridHelper);
+        
+        // حلقة شفافة حول القاعدة لتعزيز الإحساس بالفضاء
+        const ringFloor = new THREE.Mesh(
+            new THREE.TorusGeometry(2.8, 0.02, 16, 100),
+            new THREE.MeshStandardMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.3, emissive: new THREE.Color(0x004444) })
+        );
+        ringFloor.rotation.x = Math.PI / 2;
+        ringFloor.position.y = 0.01;
+        scene.add(ringFloor);
         scene.add(reflector);
 
         // ==================== النجوم ====================
