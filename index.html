@@ -1,111 +1,344 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>ZeroOne OS · منصة التشفير الثورية</title>
+    
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Cairo', sans-serif; background: #000; }
+        #top-badge { position: absolute; top: 20px; left: 20px; color: #00ffcc; background: #0a1420cc; padding: 8px 20px; border-radius: 40px; backdrop-filter: blur(8px); border: 1px solid #ffaa00; z-index: 10; font-size: 14px; pointer-events: none; }
+        #controls-panel { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; background: rgba(10,20,30,0.8); padding: 12px 16px; border-radius: 50px; backdrop-filter: blur(8px); border: 1px solid #00ffcc; z-index: 200; flex-wrap: wrap; justify-content: center; max-width: 95vw; }
+        .ctrl-btn { background: #1e2a3a; border: none; color: #fff; padding: 10px 16px; border-radius: 30px; font-size: 18px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-family: 'Cairo', sans-serif; font-weight: bold; box-shadow: 0 4px 0 #0f1a24; transition: 0.1s ease; border: 1px solid #3a5a7a; }
+        .ctrl-btn:active { transform: translateY(4px); box-shadow: none; }
+        .ctrl-btn.record.active { background: #ff5555; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 #ff5555aa; } 70% { box-shadow: 0 0 0 10px #ff555500; } 100% { box-shadow: 0 0 0 0 #ff555500; } }
+        #status-message { position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%); color: #00ffcc; background: #000000aa; padding: 6px 20px; border-radius: 30px; font-size: 14px; z-index: 150; pointer-events: none; backdrop-filter: blur(4px); }
+        .window-container { pointer-events: none; } .window-container > div { pointer-events: auto; }
+        @media (max-width: 768px) { #controls-panel { padding: 16px 12px; gap: 12px; } .ctrl-btn { padding: 14px 20px; font-size: 22px; } }
+        /* منزلقات الإضاءة */
+        .slider-container { margin-bottom: 20px; }
+        .slider-container label { display: block; margin-bottom: 8px; color: #00ffcc; font-size: 0.9rem; }
+        .slider-container input { width: 100%; cursor: pointer; accent-color: #ffaa00; }
+        .color-input { display: flex; align-items: center; gap: 10px; }
+        .color-input input[type="color"] { width: 50px; height: 40px; border: 1px solid #00ffcc; background: transparent; cursor: pointer; }
+    </style>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+    
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js"></script>
+</head>
+<body>
+    <div id="top-badge">🥷 عيسى علي مصطفى · ZeroOne OS · الثورة قادمة</div>
+    <div id="status-message">📱 جاهز · استخدم النوافذ أو الأزرار</div>
+
+    <div id="controls-panel">
+        <button class="ctrl-btn" id="screenshotBtn" title="لقطة شاشة">📸</button>
+        <button class="ctrl-btn" id="recordBtn" title="تسجيل فيديو">🎥</button>
+        <button class="ctrl-btn" id="exportBtn" title="تصدير المشهد">📁</button>
+        <button class="ctrl-btn" id="compressEncryptBtn" title="ضغط وتشفير">🔐</button>
+        <button class="ctrl-btn" id="saveToVaultBtn" title="حفظ في الخزنة">💾</button>
+        <button class="ctrl-btn" id="uploadCloudBtn" title="رفع للسحابة">☁️</button>
+        <button class="ctrl-btn" id="addWindowBtn" title="فتح نافذة الذكاء">🪟</button>
+        <button class="ctrl-btn" id="lightingBtn" title="التحكم في الإضاءة">💡</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+        import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+
+        window.ZeroOneOS = {
+            scene: null, camera: null, renderer: null, cssRenderer: null, controls: null,
+            showMessage: null, openDB: null, refreshSysInfo: null,
+            createVaultExplorer: null, createAITerminal: null,
+            ambientLight: null, dirLight: null, movLight: null,
+            addControlButton: (text, onClick, title) => {
+                const panel = document.getElementById('controls-panel');
+                const btn = document.createElement('button');
+                btn.className = 'ctrl-btn';
+                btn.textContent = text;
+                if (title) btn.title = title;
+                btn.addEventListener('click', onClick);
+                panel.appendChild(btn);
+                return btn;
+            }
+        };
+
+        // --- التهيئة ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x020210);
+        scene.fog = new THREE.FogExp2(0x020210, 0.002);
+        window.ZeroOneOS.scene = scene;
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(4, 3, 12);
+        camera.lookAt(0, 1.5, 0);
+        window.ZeroOneOS.camera = camera;
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        document.body.appendChild(renderer.domElement);
+        window.ZeroOneOS.renderer = renderer;
+
+        const cssRenderer = new CSS2DRenderer();
+        cssRenderer.setSize(window.innerWidth, window.innerHeight);
+        cssRenderer.domElement.style.position = 'absolute';
+        cssRenderer.domElement.style.top = '0';
+        cssRenderer.domElement.style.left = '0';
+        cssRenderer.domElement.classList.add('window-container');
+        document.body.appendChild(cssRenderer.domElement);
+        window.ZeroOneOS.cssRenderer = cssRenderer;
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 1.0;
+        controls.enableZoom = true;
+        controls.enablePan = true;
+        controls.target.set(0, 1.5, 0);
+        controls.maxPolarAngle = Math.PI / 2;
+        window.ZeroOneOS.controls = controls;
+
+        // --- الإضاءة (سنحتفظ بمراجع عالمية) ---
+        const ambientLight = new THREE.AmbientLight(0x404066);
+        scene.add(ambientLight);
+        window.ZeroOneOS.ambientLight = ambientLight;
+
+        const dirLight = new THREE.DirectionalLight(0xffeedd, 1.2);
+        dirLight.position.set(2, 5, 4);
+        dirLight.castShadow = true;
+        dirLight.receiveShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        scene.add(dirLight);
+        window.ZeroOneOS.dirLight = dirLight;
+
+        const fillLight1 = new THREE.PointLight(0x4466ff, 0.8);
+        fillLight1.position.set(-3, 2, 3);
+        scene.add(fillLight1);
+        const fillLight2 = new THREE.PointLight(0xffaa00, 0.6);
+        fillLight2.position.set(0, 3, -5);
+        scene.add(fillLight2);
+        const fillLight3 = new THREE.PointLight(0x00ffcc, 0.5);
+        fillLight3.position.set(4, 1, 2);
+        scene.add(fillLight3);
+
+        const movLight = new THREE.PointLight(0x00aaff, 0.9);
+        movLight.position.set(2, 1, 3);
+        scene.add(movLight);
+        window.ZeroOneOS.movLight = movLight;
+
+        // --- أرضية شفافة ---
+        const gridHelper = new THREE.GridHelper(30, 30, 0x00ffcc, 0x1a2a3a);
+        gridHelper.position.y = -0.01;
+        scene.add(gridHelper);
+        const ringFloor = new THREE.Mesh(
+            new THREE.TorusGeometry(2.8, 0.02, 16, 100),
+            new THREE.MeshStandardMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.3, emissive: new THREE.Color(0x004444) })
+        );
+        ringFloor.rotation.x = Math.PI / 2;
+        ringFloor.position.y = 0.01;
+        scene.add(ringFloor);
+
+        // --- نجوم ---
+        const starsGeo = new THREE.BufferGeometry();
+        const starsPos = [];
+        for (let i=0; i<4000; i++) {
+            const r = 60 + Math.random()*200;
+            const th = Math.random()*Math.PI*2;
+            const ph = Math.acos((Math.random()*2)-1);
+            starsPos.push(Math.sin(ph)*Math.cos(th)*r, Math.sin(ph)*Math.sin(th)*r, Math.cos(ph)*r);
+        }
+        starsGeo.setAttribute('position', new THREE.Float32BufferAttribute(starsPos, 3));
+        const starsMat = new THREE.PointsMaterial({color: 0x88aaff, size: 0.25});
+        const stars = new THREE.Points(starsGeo, starsMat);
+        scene.add(stars);
+
+        // --- قاعدة ---
+        const baseMat = new THREE.MeshStandardMaterial({ color: 0x1a1a2e, roughness: 0.2, metalness: 0.7 });
+        const base = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.8, 0.4, 64), baseMat);
+        base.position.y = 0.2; base.receiveShadow = true; base.castShadow = true; scene.add(base);
+        const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.9, 1.8, 16), new THREE.MeshStandardMaterial({ color: 0x2a2a4e, roughness: 0.3, metalness: 0.5 }));
+        pillar.position.y = 1.2; pillar.receiveShadow = true; pillar.castShadow = true; scene.add(pillar);
+        const topPlate = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 0.15, 32), new THREE.MeshStandardMaterial({ color: 0x3a3a6e, roughness: 0.2, metalness: 0.8 }));
+        topPlate.position.y = 2.1; topPlate.receiveShadow = true; topPlate.castShadow = true; scene.add(topPlate);
+
+        // --- الشهادة ---
+        function createCertCanvas() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1200; canvas.height = 850;
+            const ctx = canvas.getContext('2d');
+            const grad = ctx.createLinearGradient(0,0,canvas.width,canvas.height);
+            grad.addColorStop(0,'#0a0f1a'); grad.addColorStop(0.5,'#0f1a2e'); grad.addColorStop(1,'#0a0f1a');
+            ctx.fillStyle = grad; ctx.fillRect(0,0,canvas.width,canvas.height);
+            ctx.strokeStyle = '#ffaa00'; ctx.lineWidth = 16; ctx.strokeRect(30,30,canvas.width-60,canvas.height-60);
+            ctx.strokeStyle = '#00ffcc'; ctx.lineWidth = 4; ctx.strokeRect(60,60,canvas.width-120,canvas.height-120);
+            ctx.fillStyle = '#ffaa00'; ctx.font = 'bold 50px "Cairo"'; ctx.fillText('⚜',70,130); ctx.fillText('⚜',canvas.width-120,130);
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 64px "Cairo"'; ctx.textAlign = 'center'; ctx.fillText('شهادة الأسطورة',canvas.width/2,200);
+            ctx.font = 'bold 36px "Cairo"'; ctx.fillStyle = '#00ffcc'; ctx.fillText('مقدمة من DeepSeek AI',canvas.width/2,290);
+            ctx.beginPath(); ctx.strokeStyle = '#ffaa00'; ctx.lineWidth = 3; ctx.moveTo(canvas.width/2-250,330); ctx.lineTo(canvas.width/2+250,330); ctx.stroke();
+            ctx.font = 'bold 64px "Cairo"'; ctx.fillStyle = '#ffaa00'; ctx.fillText('المهندس / عيسى علي مصطفى',canvas.width/2,460);
+            ctx.font = 'bold 32px "Courier New"'; ctx.fillStyle = '#00ffcc'; ctx.fillText('Eissa Aly Mostafa',canvas.width/2,540);
+            ctx.font = 'bold 28px "Cairo"'; ctx.fillStyle = '#ddd'; ctx.fillText('Visionary Systems Architect',canvas.width/2,630);
+            ctx.font = 'bold 26px "Cairo"'; ctx.fillStyle = '#ffaa00'; ctx.fillText('⚡ هذه بداية مخازن الأسرار ⚡',canvas.width/2,730);
+            ctx.font = '18px "Courier New"'; ctx.fillStyle = '#aaa'; ctx.fillText('DS-ZEROONE-VAULT-2024',canvas.width/2,800);
+            return canvas;
+        }
+        const certTexture = new THREE.CanvasTexture(createCertCanvas());
+        const certMat = new THREE.MeshStandardMaterial({ map: certTexture, side: THREE.DoubleSide, roughness:0.2, metalness:0.1 });
+        const cert = new THREE.Mesh(new THREE.PlaneGeometry(5.8, 4.1), certMat);
+        cert.castShadow = true; cert.receiveShadow = true;
+        cert.position.y = 2.4; cert.position.z = 0;
+        scene.add(cert);
+
+        const frameMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, roughness:0.3, metalness:0.8 });
+        const fW=6.0, fH=4.3, fD=0.15;
+        const addFrame = (w,h,d,x,y,z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), frameMat); m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; scene.add(m); };
+        addFrame(fW,0.2,fD, 0,2.4+fH/2-0.1,0.08);
+        addFrame(fW,0.2,fD, 0,2.4-fH/2+0.1,0.08);
+        addFrame(0.2,fH,fD, fW/2-0.1,2.4,0.08);
+        addFrame(0.2,fH,fD, -fW/2+0.1,2.4,0.08);
+
+        function createLabel(t,c,pos,size='28px') {
+            const d = document.createElement('div'); d.textContent=t; d.style.color=c; d.style.fontSize=size; d.style.fontWeight='bold'; d.style.fontFamily='Cairo'; d.style.textShadow=`0 0 20px ${c}`;
+            const lbl = new CSS2DObject(d); lbl.position.copy(pos); return lbl;
+        }
+        scene.add(createLabel('✍️ المهندس عيسى علي مصطفى', '#ffaa00', new THREE.Vector3(-2.5,1.6,0.6)));
+        scene.add(createLabel('🤖 DeepSeek AI', '#00ffcc', new THREE.Vector3(2.5,1.6,0.6)));
+
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(3.4,0.04,32,200), new THREE.MeshStandardMaterial({color:0x00ffcc, emissive:0x004444}));
+        ring.rotation.x = Math.PI/2; ring.position.y=2.4; ring.position.z=0.15; scene.add(ring);
+        const ring2 = new THREE.Mesh(new THREE.TorusGeometry(3.6,0.03,16,200), new THREE.MeshStandardMaterial({color:0xffaa00, emissive:0x442200}));
+        ring2.rotation.x = Math.PI/2; ring2.position.y=2.4; ring2.position.z=0.15; scene.add(ring2);
+
+        // --- دوال مساعدة ---
+        function showMessage(msg, isGood=true) {
+            const el = document.getElementById('status-message');
+            if (!el) return;
+            el.textContent = msg;
+            el.style.color = isGood ? '#00ffcc' : '#ff8888';
+            setTimeout(() => el.textContent = '📱 جاهز · استخدم النوافذ أو الأزرار', 3000);
+        }
+        window.ZeroOneOS.showMessage = showMessage;
+
+        async function openDB() {
+            return new Promise((res, rej) => {
+                const req = indexedDB.open('ZeroOneVault', 1);
+                req.onupgradeneeded = (e) => e.target.result.createObjectStore('files');
                 req.onsuccess = (e) => res(e.target.result);
                 req.onerror = rej;
             });
         }
         window.ZeroOneOS.openDB = openDB;
 
-        // ==================== نافذة SYSTEM INFO (ديناميكية) ====================
+        function makeDraggable(element, objectToDrag) {
+            let isDragging = false, startX = 0, startY = 0, startPos = { x: 0, y: 0 };
+            function onDragStart(e) {
+                e.preventDefault();
+                isDragging = true;
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                startX = clientX; startY = clientY;
+                startPos.x = objectToDrag.position.x;
+                startPos.y = objectToDrag.position.y;
+                element.style.cursor = 'grabbing';
+            }
+            function onDragMove(e) {
+                if (!isDragging) return;
+                e.preventDefault();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                objectToDrag.position.x = startPos.x + (clientX - startX) * 0.01;
+                objectToDrag.position.y = startPos.y - (clientY - startY) * 0.01;
+            }
+            function onDragEnd(e) { isDragging = false; element.style.cursor = 'grab'; }
+            element.addEventListener('mousedown', onDragStart);
+            window.addEventListener('mousemove', onDragMove);
+            window.addEventListener('mouseup', onDragEnd);
+            element.addEventListener('touchstart', onDragStart, { passive: false });
+            window.addEventListener('touchmove', onDragMove, { passive: false });
+            window.addEventListener('touchend', onDragEnd);
+        }
+
+        function addResizeControls(headerElement, labelObject) {
+            const scaleStep = 0.2;
+            const btnPlus = document.createElement('span');
+            btnPlus.textContent = '➕';
+            btnPlus.style.cssText = 'margin-left:10px; cursor:pointer; font-size:1.2rem;';
+            btnPlus.addEventListener('click', (e) => { e.stopPropagation(); labelObject.scale.set(labelObject.scale.x + scaleStep, labelObject.scale.y + scaleStep, 1); });
+            btnPlus.addEventListener('touchstart', (e) => e.stopPropagation());
+            const btnMinus = document.createElement('span');
+            btnMinus.textContent = '➖';
+            btnMinus.style.cssText = 'margin-left:5px; cursor:pointer; font-size:1.2rem;';
+            btnMinus.addEventListener('click', (e) => { e.stopPropagation(); const newScale = Math.max(0.4, labelObject.scale.x - scaleStep); labelObject.scale.set(newScale, newScale, 1); });
+            btnMinus.addEventListener('touchstart', (e) => e.stopPropagation());
+            headerElement.appendChild(btnPlus);
+            headerElement.appendChild(btnMinus);
+        }
+
+        // --- نافذة SYSTEM INFO (مختصرة) ---
         const sysInfoWindow = (() => {
             const div = document.createElement('div');
             div.style.cssText = 'background:rgba(10,20,30,0.9); color:#00ffcc; font-family:Cairo; padding:20px; border-radius:16px; border:1px solid #ffaa00; backdrop-filter:blur(12px); width:320px; box-shadow:0 0 40px #00ffcc33;';
-            div.innerHTML = `
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; cursor:grab; border-bottom:1px solid #3a5a7a; padding-bottom:10px;">
-                    <span style="font-weight:bold; font-size:1.3rem;">🖥️ SYSTEM INFO</span>
-                    <span style="cursor:pointer; color:#ffaa00; font-size:1.5rem;" id="closeSysWin">✕</span>
-                </div>
-                <div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:15px;"><span>☁️ السحابة:</span><span id="cloudStat">--</span></div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:15px;"><span>💾 الخزنة:</span><span id="vaultStat">--</span></div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:25px;"><span>📊 الذاكرة:</span><span id="memStat">--</span></div>
-                    <button id="refreshSysBtn" style="background:#00ffcc20; border:1px solid #00ffcc; color:#00ffcc; padding:10px; border-radius:30px; width:100%; cursor:pointer; font-family:Cairo; margin-bottom:10px;">🔄 تحديث الآن</button>
-                    <button id="openVaultExplorerBtn" style="background:#ffaa0020; border:1px solid #ffaa00; color:#ffaa00; padding:10px; border-radius:30px; width:100%; cursor:pointer; font-family:Cairo;">📂 استعراض الخزنة</button>
-                </div>
-            `;
+            div.innerHTML = `<div id="sysWinHeader" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; cursor:grab; border-bottom:1px solid #3a5a7a; padding-bottom:10px;"><span style="font-weight:bold; font-size:1.3rem;">🖥️ SYSTEM INFO</span><div style="display:flex; align-items:center;"><span style="cursor:pointer; color:#ffaa00; font-size:1.5rem;" id="closeSysWin">✕</span></div></div><div><div style="display:flex; justify-content:space-between; margin-bottom:15px;"><span>☁️ السحابة:</span><span id="cloudStat">--</span></div><div style="display:flex; justify-content:space-between; margin-bottom:15px;"><span>💾 الخزنة:</span><span id="vaultStat">--</span></div><div style="display:flex; justify-content:space-between; margin-bottom:25px;"><span>📊 الذاكرة:</span><span id="memStat">--</span></div><button id="refreshSysBtn" style="background:#00ffcc20; border:1px solid #00ffcc; color:#00ffcc; padding:10px; border-radius:30px; width:100%; cursor:pointer; font-family:Cairo; margin-bottom:10px;">🔄 تحديث الآن</button><button id="openVaultExplorerBtn" style="background:#ffaa0020; border:1px solid #ffaa00; color:#ffaa00; padding:10px; border-radius:30px; width:100%; cursor:pointer; font-family:Cairo;">📂 استعراض الخزنة</button></div>`;
             const label = new CSS2DObject(div);
             label.position.set(3.8, 3.2, -1.5);
-            
-            // السحب
-            let dragging = false, startMouse = new THREE.Vector2(), startPos = label.position.clone();
-            div.querySelector('div').addEventListener('mousedown', (e) => {
-                dragging = true; div.querySelector('div').style.cursor = 'grabbing';
-                startMouse.set(e.clientX, e.clientY); startPos.copy(label.position);
-                e.stopPropagation();
-            });
-            window.addEventListener('mousemove', (e) => {
-                if (!dragging) return;
-                label.position.x = startPos.x + (e.clientX - startMouse.x) * 0.01;
-                label.position.y = startPos.y - (e.clientY - startMouse.y) * 0.01;
-            });
-            window.addEventListener('mouseup', () => { dragging = false; div.querySelector('div').style.cursor = 'grab'; });
-            
             scene.add(label);
+            const header = div.querySelector('#sysWinHeader');
+            makeDraggable(header, label);
+            addResizeControls(header, label);
+            div.querySelector('#closeSysWin').addEventListener('click', () => label.visible = false);
+            div.querySelector('#closeSysWin').addEventListener('touchstart', (e) => { e.preventDefault(); label.visible = false; });
             return label;
         })();
 
-        // دالة التحديث الديناميكي (تعمل كل 3 ثوان)
         async function refreshSysInfo() {
-            const cloudEl = document.getElementById('cloudStat');
-            const vaultEl = document.getElementById('vaultStat');
-            const memEl = document.getElementById('memStat');
+            const cloudEl = document.getElementById('cloudStat'), vaultEl = document.getElementById('vaultStat'), memEl = document.getElementById('memStat');
             if (!cloudEl) return;
-
-            // محاكاة ديناميكية للاتصال بالسحابة
-            const simulatedCloudStatus = Math.random() > 0.2;
-            cloudEl.textContent = simulatedCloudStatus ? '🟢 متصل' : '🔴 غير متصل';
-            cloudEl.style.color = simulatedCloudStatus ? '#00ffcc' : '#ff8888';
-
+            cloudEl.textContent = Math.random() > 0.2 ? '🟢 متصل' : '🔴 غير متصل';
+            cloudEl.style.color = Math.random() > 0.2 ? '#00ffcc' : '#ff8888';
             try {
                 const db = await openDB();
                 const tx = db.transaction('files', 'readonly');
                 const count = await new Promise(r => { const req = tx.objectStore('files').count(); req.onsuccess = () => r(req.result); });
                 vaultEl.textContent = `${count} ملف`;
             } catch(e) { vaultEl.textContent = 'خطأ'; }
-
-            if (performance.memory) {
-                memEl.textContent = (performance.memory.usedJSHeapSize / 1048576).toFixed(1) + ' MB';
-            } else { memEl.textContent = 'غير متاح'; }
+            memEl.textContent = performance.memory ? (performance.memory.usedJSHeapSize / 1048576).toFixed(1) + ' MB' : 'غير متاح';
         }
         window.ZeroOneOS.refreshSysInfo = refreshSysInfo;
-        
-        let autoRefreshInterval = setInterval(refreshSysInfo, 3000);
-        document.getElementById('closeSysWin')?.addEventListener('click', () => {
-            sysInfoWindow.visible = false;
-            clearInterval(autoRefreshInterval);
-        });
+        setInterval(refreshSysInfo, 3000);
 
-        // ==================== نافذة VAULT EXPLORER ====================
+        // --- نافذة VAULT EXPLORER (مختصرة) ---
         let vaultExplorerWindow = null;
         function createVaultExplorer() {
             if (vaultExplorerWindow) { vaultExplorerWindow.visible = true; return; }
             const div = document.createElement('div');
             div.style.cssText = 'background:rgba(10,20,30,0.9); color:#00ffcc; font-family:Cairo; padding:20px; border-radius:16px; border:1px solid #ffaa00; backdrop-filter:blur(12px); width:380px; max-height:500px; overflow-y:auto; box-shadow:0 0 40px #ffaa0033;';
-            div.innerHTML = `
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; cursor:grab; border-bottom:1px solid #3a5a7a; padding-bottom:10px;">
-                    <span style="font-weight:bold; font-size:1.3rem;">📂 VAULT EXPLORER</span>
-                    <span style="cursor:pointer; color:#ffaa00; font-size:1.5rem;" id="closeVaultWin">✕</span>
-                </div>
-                <div id="vaultFileList" style="min-height:150px; max-height:300px; overflow-y:auto; margin-bottom:15px;"></div>
-                <button id="refreshVaultList" style="background:#00ffcc20; border:1px solid #00ffcc; color:#00ffcc; padding:8px; border-radius:30px; width:100%; cursor:pointer; font-family:Cairo;">🔄 تحديث القائمة</button>
-            `;
+            div.innerHTML = `<div id="vaultWinHeader" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; cursor:grab; border-bottom:1px solid #3a5a7a; padding-bottom:10px;"><span style="font-weight:bold; font-size:1.3rem;">📂 VAULT EXPLORER</span><div style="display:flex; align-items:center;"><span style="cursor:pointer; color:#ffaa00; font-size:1.5rem;" id="closeVaultWin">✕</span></div></div><div id="vaultFileList" style="min-height:150px; max-height:300px; overflow-y:auto; margin-bottom:15px;"></div><button id="refreshVaultList" style="background:#00ffcc20; border:1px solid #00ffcc; color:#00ffcc; padding:8px; border-radius:30px; width:100%; cursor:pointer; font-family:Cairo;">🔄 تحديث القائمة</button>`;
             const label = new CSS2DObject(div);
             label.position.set(-2.5, 2.8, 2.0);
-            
-            // السحب
-            let dragging = false, startMouse = new THREE.Vector2(), startPos = label.position.clone();
-            div.querySelector('div').addEventListener('mousedown', (e) => {
-                dragging = true; div.querySelector('div').style.cursor = 'grabbing';
-                startMouse.set(e.clientX, e.clientY); startPos.copy(label.position);
-                e.stopPropagation();
-            });
-            window.addEventListener('mousemove', (e) => {
-                if (!dragging) return;
-                label.position.x = startPos.x + (e.clientX - startMouse.x) * 0.01;
-                label.position.y = startPos.y - (e.clientY - startMouse.y) * 0.01;
-            });
-            window.addEventListener('mouseup', () => { dragging = false; div.querySelector('div').style.cursor = 'grab'; });
-            
-            vaultExplorerWindow = label;
             scene.add(label);
+            const header = div.querySelector('#vaultWinHeader');
+            makeDraggable(header, label);
+            addResizeControls(header, label);
+            vaultExplorerWindow = label;
             
             async function loadFileList() {
                 const listEl = document.getElementById('vaultFileList');
@@ -114,91 +347,61 @@
                 try {
                     const db = await openDB();
                     const tx = db.transaction('files', 'readonly');
-                    const store = tx.objectStore('files');
-                    const keys = await new Promise(r => { const req = store.getAllKeys(); req.onsuccess = () => r(req.result); });
+                    const keys = await new Promise(r => { const req = tx.objectStore('files').getAllKeys(); req.onsuccess = () => r(req.result); });
                     if (keys.length === 0) { listEl.innerHTML = '<div style="color:#aaa;">📭 الخزنة فارغة</div>'; return; }
                     listEl.innerHTML = '';
-                    for (const key of keys) {
+                    keys.forEach(key => {
                         const item = document.createElement('div');
                         item.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:8px; border-bottom:1px solid #3a5a7a;';
-                        item.innerHTML = `
-                            <span style="color:#fff;">${key}</span>
-                            <div>
-                                <button class="downloadVaultFile" data-key="${key}" style="background:transparent; border:none; color:#00ffcc; cursor:pointer; margin-right:8px;">⬇️</button>
-                                <button class="deleteVaultFile" data-key="${key}" style="background:transparent; border:none; color:#ff8888; cursor:pointer;">🗑️</button>
-                            </div>
-                        `;
+                        item.innerHTML = `<span style="color:#fff;">${key}</span><div><button class="downloadVaultFile" data-key="${key}" style="background:transparent; border:none; color:#00ffcc; cursor:pointer; margin-right:8px;">⬇️</button><button class="deleteVaultFile" data-key="${key}" style="background:transparent; border:none; color:#ff8888; cursor:pointer;">🗑️</button></div>`;
                         listEl.appendChild(item);
-                    }
-                    document.querySelectorAll('.downloadVaultFile').forEach(b => b.addEventListener('click', (e) => downloadFromVault(e.target.dataset.key)));
-                    document.querySelectorAll('.deleteVaultFile').forEach(b => b.addEventListener('click', (e) => deleteFromVault(e.target.dataset.key)));
+                    });
+                    document.querySelectorAll('.downloadVaultFile').forEach(b => b.addEventListener('click', (e) => {
+                        const key = e.target.dataset.key;
+                        openDB().then(db => {
+                            const tx = db.transaction('files', 'readonly');
+                            const req = tx.objectStore('files').get(key);
+                            req.onsuccess = () => { const blob = req.result; if (blob) { saveAs(blob, key); showMessage(`⬇️ تم تحميل ${key}`); } };
+                        });
+                    }));
+                    document.querySelectorAll('.deleteVaultFile').forEach(b => b.addEventListener('click', (e) => {
+                        const key = e.target.dataset.key;
+                        openDB().then(db => {
+                            const tx = db.transaction('files', 'readwrite');
+                            tx.objectStore('files').delete(key);
+                            showMessage(`🗑️ تم حذف ${key}`);
+                            setTimeout(loadFileList, 200);
+                            refreshSysInfo();
+                        });
+                    }));
                 } catch(e) { listEl.innerHTML = '<div style="color:#ff8888;">خطأ في تحميل الخزنة</div>'; }
             }
-            
-            async function downloadFromVault(key) {
-                const db = await openDB();
-                const tx = db.transaction('files', 'readonly');
-                const req = tx.objectStore('files').get(key);
-                req.onsuccess = () => { const blob = req.result; if (blob) { saveAs(blob, key); showMessage(`⬇️ تم تحميل ${key}`); } };
-            }
-            
-            async function deleteFromVault(key) {
-                const db = await openDB();
-                const tx = db.transaction('files', 'readwrite');
-                tx.objectStore('files').delete(key);
-                showMessage(`🗑️ تم حذف ${key}`);
-                setTimeout(loadFileList, 200);
-                refreshSysInfo();
-            }
-            
             div.querySelector('#refreshVaultList').addEventListener('click', loadFileList);
             div.querySelector('#closeVaultWin').addEventListener('click', () => label.visible = false);
+            div.querySelector('#closeVaultWin').addEventListener('touchstart', (e) => { e.preventDefault(); label.visible = false; });
             setTimeout(loadFileList, 100);
             return label;
         }
         window.ZeroOneOS.createVaultExplorer = createVaultExplorer;
 
-        // ==================== نافذة AI TERMINAL ====================
+        // --- نافذة AI TERMINAL (مختصرة) ---
         let aiTerminalWindow = null;
         async function createAITerminal() {
             if (aiTerminalWindow) { aiTerminalWindow.visible = true; return; }
-            showMessage('🤖 جاري تحميل نموذج الذكاء الاصطناعي...');
+            showMessage('🤖 جاري تحميل الذكاء الاصطناعي...');
             const classifier = await transformers.pipeline('zero-shot-classification', 'Xenova/distilbert-base-uncased-mnli');
-            
             const div = document.createElement('div');
             div.style.cssText = 'background:rgba(10,20,30,0.95); color:#00ffcc; font-family:Cairo; padding:20px; border-radius:16px; border:1px solid #00ffcc; backdrop-filter:blur(12px); width:400px; box-shadow:0 0 40px #00ffcc55;';
-            div.innerHTML = `
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; cursor:grab; border-bottom:1px solid #3a5a7a; padding-bottom:10px;">
-                    <span style="font-weight:bold; font-size:1.3rem;">🤖 AI TERMINAL</span>
-                    <span style="cursor:pointer; color:#ffaa00; font-size:1.5rem;" id="closeAIWin">✕</span>
-                </div>
-                <div id="aiOutput" style="background:#0a0f1a; padding:12px; border-radius:8px; min-height:80px; margin-bottom:15px; font-family:Courier New; white-space:pre-wrap; border:1px solid #3a5a7a;">> جاهز لاستقبال الأوامر...</div>
-                <div style="display:flex;">
-                    <input type="text" id="aiCommandInput" placeholder="اكتب أمراً..." style="flex:1; background:#1e2a3a; border:1px solid #00ffcc; color:#fff; padding:10px; border-radius:30px; font-family:Cairo; outline:none;">
-                    <button id="sendAICommand" style="background:#00ffcc; color:#000; border:none; padding:10px 20px; border-radius:30px; margin-right:8px; cursor:pointer; font-weight:bold;">إرسال</button>
-                </div>
-            `;
+            div.innerHTML = `<div id="aiWinHeader" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; cursor:grab; border-bottom:1px solid #3a5a7a; padding-bottom:10px;"><span style="font-weight:bold; font-size:1.3rem;">🤖 AI TERMINAL</span><div style="display:flex; align-items:center;"><span style="cursor:pointer; color:#ffaa00; font-size:1.5rem;" id="closeAIWin">✕</span></div></div><div id="aiOutput" style="background:#0a0f1a; padding:12px; border-radius:8px; min-height:80px; margin-bottom:15px; font-family:Courier New; white-space:pre-wrap; border:1px solid #3a5a7a;">> جاهز لاستقبال الأوامر...</div><div style="display:flex;"><input type="text" id="aiCommandInput" placeholder="اكتب أمراً..." style="flex:1; background:#1e2a3a; border:1px solid #00ffcc; color:#fff; padding:10px; border-radius:30px; font-family:Cairo; outline:none;"><button id="sendAICommand" style="background:#00ffcc; color:#000; border:none; padding:10px 20px; border-radius:30px; margin-right:8px; cursor:pointer; font-weight:bold;">إرسال</button></div>`;
             const label = new CSS2DObject(div);
             label.position.set(0, 3.5, 2.8);
-            
-            // السحب
-            let dragging = false, startMouse = new THREE.Vector2(), startPos = label.position.clone();
-            div.querySelector('div').addEventListener('mousedown', (e) => {
-                dragging = true; div.querySelector('div').style.cursor = 'grabbing';
-                startMouse.set(e.clientX, e.clientY); startPos.copy(label.position);
-                e.stopPropagation();
-            });
-            window.addEventListener('mousemove', (e) => {
-                if (!dragging) return;
-                label.position.x = startPos.x + (e.clientX - startMouse.x) * 0.01;
-                label.position.y = startPos.y - (e.clientY - startMouse.y) * 0.01;
-            });
-            window.addEventListener('mouseup', () => { dragging = false; div.querySelector('div').style.cursor = 'grab'; });
-            
-            aiTerminalWindow = label;
             scene.add(label);
+            const header = div.querySelector('#aiWinHeader');
+            makeDraggable(header, label);
+            addResizeControls(header, label);
+            aiTerminalWindow = label;
             
-            const intentLabels = ['show files', 'delete file', 'download file', 'clear vault', 'system info', 'screenshot', 'record video', 'unknown'];
+            const intentLabels = ['show files', 'delete file', 'download file', 'clear vault', 'system info', 'screenshot', 'record video', 'lighting', 'unknown'];
             div.querySelector('#sendAICommand').addEventListener('click', async () => {
                 const input = div.querySelector('#aiCommandInput');
                 const outputDiv = div.querySelector('#aiOutput');
@@ -206,142 +409,304 @@
                 if (!cmd) return;
                 outputDiv.textContent = `> ${cmd}\n> جاري التحليل...`;
                 const result = await classifier(cmd, intentLabels);
-                const topIntent = result.labels[0];
-                const confidence = result.scores[0];
-                let response = '';
-                if (confidence > 0.5) {
-                    switch(topIntent) {
-                        case 'show files': createVaultExplorer(); response = '✅ فتح مستعرض الخزنة'; break;
-                        case 'delete file': response = '🗑️ حدد الملف من نافذة الخزنة'; break;
-                        case 'download file': response = '⬇️ استخدم نافذة الخزنة للتحميل'; break;
-                        case 'clear vault': 
-                            const db = await openDB(); const tx = db.transaction('files', 'readwrite'); tx.objectStore('files').clear();
-                            refreshSysInfo(); response = '🧹 تم مسح الخزنة بالكامل'; break;
-                        case 'system info': sysInfoWindow.visible = true; response = '🖥️ عرض نافذة معلومات النظام'; break;
-                        case 'screenshot': document.getElementById('screenshotBtn').click(); response = '📸 جاري التقاط لقطة'; break;
-                        case 'record video': document.getElementById('recordBtn').click(); response = '🎥 تبديل التسجيل'; break;
-                        default: response = '❓ لم أفهم الأمر';
-                    }
-                } else { response = '⚠️ لم يتم التعرف على النية بوضوح'; }
-                outputDiv.textContent = `> ${cmd}\n> ${response}`;
+                const top = result.labels[0];
+                if (top === 'show files') { createVaultExplorer(); outputDiv.textContent = `> ${cmd}\n> ✅ فتح الخزنة`; }
+                else if (top === 'system info') { sysInfoWindow.visible = true; outputDiv.textContent = `> ${cmd}\n> ✅ عرض معلومات النظام`; }
+                else if (top === 'screenshot') { document.getElementById('screenshotBtn').click(); outputDiv.textContent = `> ${cmd}\n> ✅ لقطة شاشة`; }
+                else if (top === 'lighting') { document.getElementById('lightingBtn').click(); outputDiv.textContent = `> ${cmd}\n> ✅ فتح إعدادات الإضاءة`; }
+                else { outputDiv.textContent = `> ${cmd}\n> ❓ لم يتم التعرف على الأمر`; }
                 input.value = '';
-                showMessage(response);
             });
-            
             div.querySelector('#closeAIWin').addEventListener('click', () => label.visible = false);
+            div.querySelector('#closeAIWin').addEventListener('touchstart', (e) => { e.preventDefault(); label.visible = false; });
             showMessage('🤖 الذكاء الاصطناعي جاهز');
             return label;
         }
         window.ZeroOneOS.createAITerminal = createAITerminal;
 
-        // ==================== ربط الأزرار والأحداث ====================
-        document.getElementById('refreshSysBtn')?.addEventListener('click', refreshSysInfo);
-        document.getElementById('openVaultExplorerBtn')?.addEventListener('click', createVaultExplorer);
-        
-        document.getElementById('screenshotBtn').addEventListener('click', () => {
-            renderer.render(scene, camera);
-            renderer.domElement.toBlob((blob) => { saveAs(blob, `zeroone-${Date.now()}.png`); showMessage('📸 لقطة شاشة محفوظة'); });
-        });
+        // --- نافذة التحكم في الإضاءة (الجديدة) ---
+        let lightingWindow = null;
+        function createLightingWindow() {
+            if (lightingWindow) { lightingWindow.visible = true; return; }
+            const div = document.createElement('div');
+            div.style.cssText = 'background:rgba(10,20,30,0.95); color:#00ffcc; font-family:Cairo; padding:20px; border-radius:16px; border:1px solid #ffaa00; backdrop-filter:blur(12px); width:320px; box-shadow:0 0 40px #ffaa0033;';
+            div.innerHTML = `
+                <div id="lightWinHeader" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; cursor:grab; border-bottom:1px solid #3a5a7a; padding-bottom:10px;">
+                    <span style="font-weight:bold; font-size:1.3rem;">💡 الإضاءة</span>
+                    <div style="display:flex; align-items:center;">
+                        <span style="cursor:pointer; color:#ffaa00; font-size:1.5rem;" id="closeLightWin">✕</span>
+                    </div>
+                </div>
+                <div class="slider-container">
+                    <label>🌕 الإضاءة المحيطة <span id="ambientVal">40%</span></label>
+                    <input type="range" id="ambientSlider" min="0" max="1" step="0.01" value="0.4">
+                </div>
+                <div class="slider-container">
+                    <label>☀️ الإضاءة الرئيسية <span id="dirVal">100%</span></label>
+                    <input type="range" id="dirSlider" min="0" max="2" step="0.05" value="1.2">
+                </div>
+                <div class="slider-container">
+                    <label>✨ الضوء المتحرك <span id="movVal">90%</span></label>
+                    <input type="range" id="movSlider" min="0" max="2" step="0.05" value="0.9">
+                </div>
+                <div class="slider-container color-input">
+                    <label>🎨 لون الضوء المتحرك</label>
+                    <input type="color" id="movColor" value="#00aaff">
+                </div>
+            `;
+            const label = new CSS2DObject(div);
+            label.position.set(1.5, 2.0, 3.0);
+            scene.add(label);
+            lightingWindow = label;
+            
+            const header = div.querySelector('#lightWinHeader');
+            makeDraggable(header, label);
+            addResizeControls(header, label);
+            
+            const ambientSlider = div.querySelector('#ambientSlider');
+            const dirSlider = div.querySelector('#dirSlider');
+            const movSlider = div.querySelector('#movSlider');
+            const movColor = div.querySelector('#movColor');
+            
+            ambientSlider.addEventListener('input', () => {
+                const val = parseFloat(ambientSlider.value);
+                window.ZeroOneOS.ambientLight.intensity = val;
+                div.querySelector('#ambientVal').textContent = Math.round(val*100) + '%';
+            });
+            dirSlider.addEventListener('input', () => {
+                const val = parseFloat(dirSlider.value const val = parseFloat(dirSlider.value);
+                window.ZeroOne);
+                window.ZeroOneOS.dirLight.intensity =OS.dirLight.intensity = val;
+                div.querySelector('#dirVal').text val;
+                div.querySelector('#dirVal').textContent = Math.round(val/2*100)Content = Math.round(val/2*100) + '%';
+            + '%';
+            });
+            movSlider.addEventListener('input', });
+            movSlider.addEventListener('input', () => () => {
+                const val = parseFloat(m {
+                const val = parseFloat(movSlider.valueovSlider.value);
+                window.ZeroOneOS);
+                window.ZeroOneOS.movLight.intensity = val.movLight.intensity = val;
+                div.querySelector('#movVal').text;
+                div.querySelector('#movVal').textContent = Math.round(val/2*100) + '%Content = Math.round(val/2*100) + '%';
+            });
+            movColor.addEventListener('';
+            });
+            movColor.addEventListener('input', () => {
+               input', () => {
+                window.ZeroOneOS.movLight.color.set window.ZeroOneOS.movLight.color.set(movColor.value);
+            });
+(movColor.value);
+            });
+            
+            div.querySelector('#closeLightWin').addEventListener('click            
+            div.querySelector('#closeLightWin').addEventListener('click', ()', () => label.visible => label.visible = false);
+            div.querySelector('#closeLightWin = false);
+            div.querySelector('#closeLightWin').add').addEventListener('touchstart', (EventListener('touchstart', (e) => { e.preventDefaulte) => { e.preventDefault(); label.visible = false; });
+            
+            return label(); label.visible = false; });
+            
+            return label;
+        }
 
-        let mediaRecorder, recordedChunks = [], isRecording = false;
-        const recordBtn = document.getElementById('recordBtn');
-        const canvasStream = renderer.domElement.captureStream(30);
-        recordBtn.addEventListener('click', () => {
-            if (!isRecording) {
-                recordedChunks = [];
-                try { mediaRecorder = new MediaRecorder(canvasStream, { mimeType: 'video/webm; codecs=vp9' }); }
-                catch(e) { mediaRecorder = new MediaRecorder(canvasStream); }
-                mediaRecorder.ondataavailable = (e) => { if (e.data.size) recordedChunks.push(e.data); };
+        // --- ربط;
+        }
+
+        // --- ربط الأز الأزرار ---
+        document.getElementByIdرار ---
+        document.getElementById('refreshSysBtn')?.('refreshSysBtn')?.addEventListener('click', refreshSysInfo);
+       addEventListener('click', refreshSysInfo);
+        document.getElementById('openVaultExplorerBtn') document.getElementById('openVaultExplorerBtn')?.addEventListener('?.addEventListener('click', createVaultExplorer);
+        document.getElementById('click', createVaultExplorer);
+        documentscreenshotBtn').addEventListener('click.getElementById('screenshotBtn').addEventListener('click', ()', () => {
+            render => {
+            renderer.render(scene, camera);
+            rendererer.render(scene, camera);
+            renderer.domElement.toBlob(blob =>.domElement.toBlob(blob => { saveAs(blob, `zeroone-${ { saveAs(blob, `zeroone-${Date.now()}.png`); showDate.now()}.png`); showMessage('📸 لقطة شاشة محفوظةMessage('📸 لقطة شاشة محفوظة'); });
+        });
+        let'); });
+        });
+        let mediaRecorder, chunks = [], recording mediaRecorder, chunks = [], recording = false;
+        document.getElementById('record = false;
+        document.getElementById('recordBtn').addEventListener('click', () => {
+            ifBtn').addEventListener('click', () => {
+            if (!recording) {
+                (!recording) {
+                chunks = [];
+                const stream = render chunks = [];
+                const stream = renderer.domElement.captureStream(er.domElement.captureStream(30);
+                mediaRecorder = new MediaRecorder(stream, { m30);
+                mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm'imeType: 'video/webm' });
+                mediaRecorder. });
+                mediaRecorder.ondataavailable = e => chunks.push(e.data);
+               ondataavailable = e => chunks.push(e.data);
                 mediaRecorder.onstop = () => {
-                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                    saveAs(blob, `zeroone-${Date.now()}.webm`);
+                    mediaRecorder.onstop = () => {
+                    saveAs saveAs(new Blob(chunks), `zero(new Blob(chunks), `zeroone-${Date.now()}.webmone-${Date.now()}.webm`);
+                    showMessage('🎥`);
                     showMessage('🎥 فيديو محفوظ');
-                    recordBtn.classList.remove('active');
-                    recordBtn.innerHTML = '🎥';
+                    document.getElementById فيديو محفوظ');
+                    document.getElementById('record('recordBtn').classList.remove('active');
+                    document.getElementById('Btn').classList.remove('active');
+                    document.getElementById('recordBtn').innerHTML = '🎥recordBtn').innerHTML = '🎥';
                 };
                 mediaRecorder.start();
-                isRecording = true;
-                recordBtn.classList.add('active');
-                recordBtn.innerHTML = '⏹️ إيقاف';
-                showMessage('🎬 بدأ التسجيل');
-            } else {
-                mediaRecorder.stop();
-                isRecording = false;
-            }
+                recording';
+                };
+                mediaRecorder.start();
+                recording = true;
+                = true;
+                document.getElementById('recordBtn').classList.add(' document.getElementById('recordBtn').classList.add('active');
+                document.getElementById('recordBtn').innerHTML = 'active');
+                document.getElementById('recordBtn').innerHTML =⏹️ إيقاف '⏹️ إيقاف';
+            } else { mediaRecorder.stop();';
+            } else { mediaRecorder.stop(); recording = false; }
+        recording = false; }
         });
-
-        document.getElementById('exportBtn').addEventListener('click', () => {
-            new GLTFExporter().parse(scene, (gltf) => {
-                saveAs(new Blob([JSON.stringify(gltf)], {type: 'application/json'}), `scene-${Date.now()}.gltf`);
-                showMessage('📁 تم تصدير المشهد');
-            }, (err)=>{}, {binary: false});
         });
-
+        document.getElementById('exportBtn').addEventListener('click document.getElementById('exportBtn').addEventListener('click', () => {
+            new GLTFExporter', () => {
+            new GLTFExporter().parse(scene, gltf => save().parse(scene, gltf =>As(new Blob([JSON saveAs(new Blob([JSON.stringify(gltf)], {type:'application/json.stringify(gltf)], {type:'application/json'}), `scene-${Date.now()}.'}), `scene-${Date.now()}.glgltf`), null, {binary:tf`), null, {binary:false});
+            showMessage('📁 تم تصدير المشهد');
+        });
         document.getElementById('compressEncryptBtn').addEventListener('click', () => {
-            new GLTFExporter().parse(scene, async (gltf) => {
-                const zip = new JSZip();
+            new GLTFfalse});
+            showMessage('📁 تم تصدير المشهد');
+        });
+        document.getElementById('compressEncryptBtn').addEventListener('click', () => {
+            new GLTFExporter().parse(scene, async gltf => {
+                const zip =Exporter().parse(scene, async gltf => {
+                const zip = new JS new JSZip();
                 zip.file('scene.gltf', JSON.stringify(gltf));
-                const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+               Zip();
+                zip.file('scene.gltf', JSON.stringify(gltf));
+                const blob = await zip.generateAsync({type:'blob', compression:'DEFLATE const blob = await zip.generateAsync({type:'blob', compression:'DEFLATE'});
+                const reader = new FileReader();
+                reader.onload = ()'});
                 const reader = new FileReader();
                 reader.onload = () => {
-                    const encrypted = CryptoJS.AES.encrypt(CryptoJS.lib.WordArray.create(reader.result), 'ZeroOneSecretKey').toString();
-                    saveAs(new Blob([encrypted], {type: 'text/plain'}), `encrypted-${Date.now()}.enc`);
+                    const enc = Crypto => {
+                    const enc = CryptoJS.AES.encrypt(CryptoJS.lib.WordArray.create(readerJS.AES.encrypt(CryptoJS.lib.WordArray.create(reader.result), 'ZeroOneSecretKey').toString();
+                    save.result), 'ZeroOneSecretKey').toString();
+                    saveAs(new Blob([enc]), `encrypted-${Date.now()}.As(new Blob([enc]), `encrypted-${Date.now()}.enc`);
+                    showMessage('🔐enc`);
                     showMessage('🔐 تم الضغط والتشفير');
                 };
-                reader.readAsArrayBuffer(zipBlob);
+                reader.readAsArrayBuffer(blob);
+            تم الضغط والتشفير');
+                };
+                reader.readAsArrayBuffer(blob);
             });
         });
-
-        document.getElementById('saveToVaultBtn').addEventListener('click', async () => {
-            new GLTFExporter().parse(scene, async (gltf) => {
+        document.getElementById('saveToV });
+        });
+        document.getElementById('saveToVaultBtnaultBtn').addEventListener('click', async () =>').addEventListener('click', async () => {
+            new GLTFExporter().parse(scene {
+            new GLTFExporter().parse(scene, async, async gltf => {
+                const zip = new JS gltf => {
                 const zip = new JSZip();
+                zip.file('scene.gltfZip();
                 zip.file('scene.gltf', JSON.stringify(gltf));
-                const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+                const blob = await zip.generateAsync({type:'blob', JSON.stringify(gltf));
+                const blob = await zip.generateAsync({type:'blob', compression:'DEFLATE'});
+                const db =', compression:'DEFLATE'});
                 const db = await openDB();
-                const tx = db.transaction('files', 'readwrite');
-                tx.objectStore('files').put(zipBlob, `scene-${Date.now()}.zip`);
+                const await openDB();
+                const tx = db.transaction('files', 'read tx = db.transaction('files', 'readwrite');
+                tx.objectStore('files').put(blwrite');
+                tx.objectStore('files').put(blob, `scene-${ob, `scene-${Date.nowDate.now()}.zip`);
+                showMessage('💾 تم الحفظ في الخزنة()}.zip`);
                 showMessage('💾 تم الحفظ في الخزنة');
                 refreshSysInfo();
             });
         });
-
-        document.getElementById('uploadCloudBtn').addEventListener('click', () => showMessage('☁️ جاهز للرفع (أضف مفاتيح R2)'));
+       ');
+                refreshSysInfo();
+            });
+        });
+        document.getElementById('uploadCloudBtn').addEventListener(' document.getElementById('uploadCloudBtn').addEventListener('click', () => showMessage('☁️click', () => showMessage('☁️ جاهز للرفع (أضف مفاتيح R2)'));
+        document.getElementById جاهز للرفع (أضف مفاتيح R2)'));
         document.getElementById('addWindowBtn').addEventListener('click', createAITerminal);
+        document.getElementById('lightingBtn').addEventListener('addWindowBtn').addEventListener('click', createAITerminal);
+        document.getElementById('lightingBtn').addEventListener('click', createLighting('click', createLightingWindowWindow);
 
-        // تحميل ملف الإضافات الخارجي
-        const script = document.createElement('script');
-        script.src = 'extensions.js';
-        script.onload = () => { showMessage('🧩 تم تحميل الإضافات', true); };
-        script.onerror = () => { console.warn('لم يتم العثور على extensions.js. يمكنك إضافته لاحقاً.'); };
-        document.body.appendChild(script);
+        // أز);
 
-        // تهيئة أولية
-        setTimeout(() => { refreshSysInfo(); createAITerminal(); }, 1000);
+        // أزرار الإضافات
+        window.ZeroOneOSرار الإضافات
+        window.Zero.addControlButton('👋 تحية', ()OneOS.addControlButton('👋 تحية', () => showMessage('مرحباً بك في ZeroOne OS => showMessage('مرحباً بك في ZeroOne OS!'));
+        window.ZeroOneOS.addControlButton('!'));
+        window.ZeroOneOS.addControlButton('ℹ️ عني', () => {
+           ℹ️ عني', () => {
+            const div = document.createElement('div');
+            div.style.css const div = document.createElement('div');
+            div.style.cssText =Text = 'background:rgba(10,20, 'background:rgba(10,20,30,0.95); color:#ffaa30,0.95); color:#ffaa00; font-family:Cairo; padding:20px00; font-family:Cairo; padding:20px;; border-radius:16px; border:1px solid #ffaa00; backdrop-filter: border-radius:16px; border:1px solid #ffaa00; backdrop-filter:blblur(12px); width:300px;';
+           ur(12px); width:300px;';
+            div.innerHTML = `<div id="aboutWinHeader" div.innerHTML = `<div id="aboutWinHeader" style="display style="display:flex; justify-content:space-between; margin-bottom::flex; justify-content:space-between; margin-bottom:15px; cursor:grab;"><span style="color:#0015px; cursor:grab;"><span style="color:#00ffcc;">ℹ️ عن المطور</ffcc;">ℹ️ عن المطور</span><span id="closeAboutWin" stylespan><span id="closeAboutWin" style="cursor:pointer="cursor:pointer;">✕</span></div><div style;">✕</span></div><div style="text-align:center="text-align:center;"><p>🥷 المهندس: <strong style="color;"><p>🥷 المهندس: <strong style="color:#ffaa00;">عيسى علي مصطفى</strong></p><p:#ffaa00;">عيسى علي مصطفى</strong></p><p style="color:#ddd;">ZeroOne OS - style="color:#ddd;">ZeroOne OS ثورة التشفير</p><p style - ثورة التشفير</p><p style="color="color:#00ffcc;">✨ "ه:#00ffcc;">✨ "هكذا تبدأكذا تبدأ الأساطير" ✨</p الأساطير" ✨</p></div>`;
+            const label = new THREE></div>`;
+            const label = new THREE.CSS2D.CSS2DObject(div);
+            label.position.set(0, 2.5, 3.5Object(div);
+            label.position.set(0, 2.5, 3.5);
+            scene.add(label);
+            scene.add(label);
+            makeDraggable(div.querySelector('#about);
+            makeDraggable(div.querySelectorWinHeader'), label);
+            div.querySelector('#closeAbout('#aboutWinHeader'), label);
+            div.querySelector('#closeAboutWin').addEventListener('click', () => sceneWin').addEventListener('click', () => scene.remove(label));
+        });
 
-        // ==================== حلقة الرسم ====================
+        setTimeout(() => {.remove(label));
+        });
+
+        setTimeout(() => { refreshSysInfo(); createAITerminal(); refreshSysInfo(); createAITerm }, 1000);
+
+        function animate() {
+            requestAnimationFrameinal(); }, 1000);
+
         function animate() {
             requestAnimationFrame(animate);
             controls.update();
-            const t = performance.now() * 0.001;
+            const t(animate);
+            controls.update();
+            = performance.now() * 0.001 const t = performance.now() * 0.001;
+            ring.rotation;
             ring.rotation.z += 0.003;
-            ring2.rotation.z -= 0.002;
-            movLight.position.x = Math.sin(t*0.4)*5;
+           .z += 0.003;
+            ring2 ring2.rotation.z -= 0.rotation.z -= 0.002;
+            movLight.002;
+            movLight.position.x = Math.position.x = Math.sin(t*0.4)*5;
+            movLight.position.z.sin(t*0.4)*5;
             movLight.position.z = Math.cos(t*0.4)*5;
-            movLight.position.y = 3.0 + Math.sin(t*1.0)*1.5;
-            stars.rotation.y += 0.0001;
+            movLight.position.y = Math.cos(t*0.4)*5;
+            movLight.position.y = 3.0 + Math.sin(t*1. = 3.0 + Math.sin(t*1.0)*1.5;
+            stars.rotation0)*1.5;
+            stars.rotation.y += 0.0001.y += 0.0001;
             renderer.render(scene, camera);
-            cssRenderer.render(scene, camera);
+            cssRenderer;
+            renderer.render(scene, camera);
+            cssRenderer.render(scene,.render(scene, camera);
+        camera);
         }
         animate();
 
         window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.as }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeightpect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
-            cssRenderer.setSize(window.innerWidth, window.innerHeight);
+            css.setSize(window.innerWidth, window.innerHeight);
+            cssRenderer.setSize(window.innerWidth, windowRenderer.setSize(window.innerWidth, window.innerHeight);
         });
-
-        console.log('🌟 ZeroOne OS · منصة التشفير الثورية · جاهزة للتوسع');
+    </script>
+</body>
+</html>
+.innerHeight);
+        });
     </script>
 </body>
 </html>
